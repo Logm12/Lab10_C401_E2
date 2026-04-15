@@ -1,51 +1,60 @@
-# Kiến trúc pipeline - Lab Day 10
+# Kien truc pipeline - Lab Day 10
 
-**Nhóm:** C401-E2
-**Cập nhật:** `2026-04-15`
+**Nhom:** ___________
+**Cap nhat:** `2026-04-15`
 
-## 1. Sơ đồ luồng
+## 1. So do luong
 
-<p align="center">
-  <img src="Flowchart.png" width="400">
-</p>
+```mermaid
+flowchart LR
+    A[data/raw/policy_export_dirty*.csv] --> B[Ingest]
+    B --> C[Clean]
+    C --> Q1[Quarantine clean]
+    C --> D[Validate]
+    D --> Q2[Quarantine validate]
+    D --> E[Cleaned CSV]
+    E --> F[Embed Chroma]
+    F --> G[Serving / Retrieval Day 08-09]
+    E --> H[Manifest + Logs]
+    H --> I[Freshness check]
+```
 
+Data quality gates:
 
-Cổng chất lượng dữ liệu (Data quality gates):
+- Sau ingest/clean: unknown `doc_id`, `missing_effective_date`, stale HR effective date, duplicate chunk di vao quarantine.
+- Sau validate: chunk ngan, stale refund con sot, timestamp sai dinh dang, duplicate doc+chunk bi chan truoc khi embed.
+- Sau publish: manifest giu `run_id`, record counts, metric impact, `latest_exported_at`.
 
-- Sau ingest/clean: `doc_id` không xác định, thiếu `effective_date`, ngày hiệu lực HR cũ, các đoạn (chunk) trùng lặp sẽ đi vào quarantine.
-- Sau validate: chunk ngắn, chính sách hoàn tiền cũ còn sót, timestamp sai định dạng, trùng lặp tài liệu+chunk bị chặn trước khi embed.
-- Sau publish: manifest giữ `run_id`, số lượng bản ghi, tác động metric, `latest_exported_at`.
+## 2. Ranh gioi trach nhiem
 
-## 2. Ranh giới trách nhiệm
-
-| Thành phần | Đầu vào | Đầu ra | Chủ sở hữu nhóm |
+| Thanh phan | Input | Output | Owner nhom |
 |------------|-------|--------|------------|
-| Ingest | Raw CSV | `raw_records`, các hàng dữ liệu thô | Ingestion Owner |
-| Transform | Các hàng dữ liệu thô | Các hàng đã làm sạch + metric làm sạch | Cleaning / Quality Owner |
-| Quality | Các hàng đã làm sạch | Quarantine kiểm định + kết quả mong đợi | Cleaning / Quality Owner |
+| Ingest | Raw CSV | `raw_records`, raw rows | Ingestion Owner |
+| Transform | Raw rows | Cleaned rows + clean metrics | Cleaning / Quality Owner |
+| Quality | Cleaned rows | Validation quarantine + expectation results | Cleaning / Quality Owner |
 | Embed | Cleaned CSV | Chroma collection `day10_kb` | Embed Owner |
-| Monitor | Manifest, logs, eval CSV | Trạng thái độ tươi (freshness), bằng chứng báo cáo | Monitoring / Docs Owner |
+| Monitor | Manifest, logs, eval CSV | Freshness status, report evidence | Monitoring / Docs Owner |
 
-## 3. Tính không đổi (Idempotency) & chạy lại (rerun)
+## 3. Idempotency & rerun
 
 Pipeline embed theo snapshot publish:
 
-- `chunk_id` được tạo ổn định từ `doc_id + chunk_text + seq`
-- Chroma `upsert(ids=chunk_id, ...)` để chạy lại không tạo vector trùng lặp
-- Trước khi upsert, pipeline `delete` những `ids` không còn tồn tại trong lần chạy làm sạch hiện tại
+- `chunk_id` duoc tao on dinh tu `doc_id + chunk_text + seq`
+- Chroma `upsert(ids=chunk_id, ...)` de rerun khong tao duplicate vector
+- Truoc khi upsert, pipeline `delete` nhung `ids` khong con ton tai trong cleaned run hien tai
 
-Hệ quả:
+He qua:
 
-- Chạy lại cùng một đầu vào không làm phình to kho lưu trữ vector
-- Chuyển từ `inject-bad` về `normal` sẽ loại bỏ các đoạn (chunk) cũ khỏi bộ sưu tập (collection)
-- `hits_forbidden` có thể được cải thiện sau khi chạy lại mà không cần đặt lại thủ công Chroma
+- Chay lai cung input khong lam phinh vector store
+- Chuyen tu `inject-bad` ve `normal` se prune stale chunk khoi collection
+- `hits_forbidden` co the duoc cai thien sau rerun ma khong can reset tay Chroma
 
-## 4. Liên hệ Day 09
+## 4. Lien he Day 09
 
-Bộ sưu tập `day10_kb` là kho dữ liệu đã qua làm sạch/kiểm định để cung cấp lại khả năng truy xuất cho bài Day 09. Day 10 không thay đổi quy trình điều phối (orchestration) của Day 09, nhưng giúp agent đọc đúng phiên bản hơn bằng cách loại bỏ chính sách cũ và ghi lại ranh giới xuất bản rõ ràng.
+Collection `day10_kb` la corpus da qua clean/validate de cap lai retrieval cho bai Day 09. Day 10 khong thay doi orchestration cua Day 09, nhung lam cho agent doc dung version hon bang cach loai stale policy va ghi lai boundary publish ro rang.
 
-## 5. Rủi ro đã biết
+## 5. Rui ro da biet
 
-- Độ tươi (Freshness) của bộ dữ liệu mẫu đang vượt quá SLA 24h, nên manifest hiện `FAIL`.
-- Khi máy không có mạng, cần đặt `HF_HUB_OFFLINE=1` và `TRANSFORMERS_OFFLINE=1` để dùng cache cục bộ của mô hình embed.
-- Top-1 truy xuất có thể vẫn đúng trong khi top-k đã bị nhiễm ngữ cảnh cũ (stale context), nên phải theo dõi `hits_forbidden`.
+- Freshness cua bo du lieu mau dang vuot SLA 24h, nen manifest hien `FAIL`.
+- Khi may khong co mang, can dat `HF_HUB_OFFLINE=1` va `TRANSFORMERS_OFFLINE=1` de dung cache local cua model embed.
+- Top-1 retrieval co the van dung trong khi top-k da bi nhiem stale context, nen phai theo doi `hits_forbidden`.

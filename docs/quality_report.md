@@ -1,75 +1,75 @@
-# Báo cáo chất lượng - Lab Day 10
+# Quality report - Lab Day 10
 
 **run_id:** `normal`, `inject-bad`
-**Ngày:** `2026-04-15`
+**Ngay:** `2026-04-15`
 
 ---
 
-## 1. Tóm tắt số liệu
+## 1. Tom tat so lieu
 
-| Chỉ số | Trước (`inject-bad`) | Sau (`normal`) | Ghi chú |
+| Chi so | Truoc (`inject-bad`) | Sau (`normal`) | Ghi chu |
 |--------|----------------------|----------------|---------|
-| raw_records | 16 | 16 | Cùng một bộ raw mở rộng để so sánh công bằng |
-| cleaned_records | 11 | 10 | `inject-bad` bỏ qua kiểm định (validate) nên giữ lại thêm 1 hàng ngắn và các đoạn hoàn tiền cũ |
-| quarantine_records | 5 | 6 | `normal` có thêm `validation_chunk_too_short=1` |
-| Expectation halt? | Có | Không | `inject-bad` thất bại `refund_no_stale_14d_window`; `normal` vượt qua toàn bộ |
+| raw_records | 16 | 16 | Cung mot bo raw mo rong de so sanh cong bang |
+| cleaned_records | 11 | 10 | `inject-bad` bo qua validate nen giu lai them 1 row ngan va stale refund chunk |
+| quarantine_records | 5 | 6 | `normal` co them `validation_chunk_too_short=1` |
+| Expectation halt? | Co | Khong | `inject-bad` fail `refund_no_stale_14d_window`; `normal` pass toan bo |
 
 ---
 
-## 2. Truy xuất trước / sau (Before / after retrieval)
+## 2. Before / after retrieval
 
-Chúng tôi đánh giá việc truy xuất bằng `eval_retrieval.py` với `top-k=5` trên cùng bộ câu hỏi chuẩn (golden questions). Hai file bằng chứng là `artifacts/eval/normal.csv` và `artifacts/eval/inject-bad.csv`.
+Chung toi danh gia retrieval bang `eval_retrieval.py` voi `top-k=5` tren cung bo cau hoi golden. Hai file chung cu la `artifacts/eval/normal.csv` va `artifacts/eval/inject-bad.csv`.
 
-**Câu hỏi then chốt:** `q_refund_window`
+**Cau hoi then chot:** `q_refund_window`
 
-- Trước (`inject-bad`): `contains_expected=yes` nhưng `hits_forbidden=yes`. Điều này cho thấy top-k vẫn chứa các đoạn cũ "14 ngày làm việc", nên nếu chỉ nhìn top-1 sẽ tưởng truy xuất ổn nhưng thực tế ngữ cảnh đã bị nhiễm.
-- Sau (`normal`): `contains_expected=yes` và `hits_forbidden=no`. Sau khi bật lại quy tắc sửa refund 14->7 và kiểm định đầy đủ, các đoạn cũ biến mất khỏi top-k.
+- Truoc (`inject-bad`): `contains_expected=yes` nhung `hits_forbidden=yes`. Dieu nay cho thay top-k van chua stale chunk "14 ngay lam viec", nen neu chi nhin top-1 se tuong retrieval on nhung thuc te context da bi nhiem.
+- Sau (`normal`): `contains_expected=yes` va `hits_forbidden=no`. Sau khi bat lai rule fix refund 14->7 va validation day du, stale chunk bien mat khoi top-k.
 
-**Đánh giá:** `q_leave_version`
+**Merit:** `q_leave_version`
 
-- Trước (`inject-bad`): `contains_expected=yes`, `hits_forbidden=no`, `top1_doc_expected=yes`.
+- Truoc (`inject-bad`): `contains_expected=yes`, `hits_forbidden=no`, `top1_doc_expected=yes`.
 - Sau (`normal`): `contains_expected=yes`, `hits_forbidden=no`, `top1_doc_expected=yes`.
 
-Điều này cho thấy quy tắc sửa phiên bản HR của Sprint 2 đã ổn định ở cả hai kịch bản; lỗi đưa vào (corruption) có chủ đích ở Sprint 3 tập trung vào thời hạn hoàn tiền và bộ kiểm định.
+Dieu nay cho thay rule fix HR version cua Sprint 2 da on dinh o ca hai kich ban; corruption chu dich o Sprint 3 tap trung vao refund window va bo validate.
 
-**Câu thứ ba để đối chiếu:** `q_p1_sla`
+**Cau thu ba de doi chieu:** `q_p1_sla`
 
-- Trước (`inject-bad`): `contains_expected=yes`, `hits_forbidden=no`.
+- Truoc (`inject-bad`): `contains_expected=yes`, `hits_forbidden=no`.
 - Sau (`normal`): `contains_expected=yes`, `hits_forbidden=no`.
 
-Nhận xét tổng hợp: truy xuất không xấu đi ở mọi câu hỏi, nhưng chất lượng quan sát đã xấu đi rõ rệt ở `q_refund_window`. Đây là bằng chứng quan trọng vì top-1 vẫn đúng, nhưng top-k đã bị nhiễm các bằng chứng cũ (stale evidence). Theo tinh thần Day 10, đó là một sự thụt lùi (regression) thực sự ở lớp dữ liệu.
+Nhan xet tong hop: retrieval khong xau di o moi cau hoi, nhung chat luong quan sat da xau di ro o `q_refund_window`. Day la bang chung quan trong vi top-1 van dung, nhung top-k da bi nhiem stale evidence. Theo tinh than Day 10, do la mot regression that su o data layer.
 
 ---
 
-## 3. Độ tươi & giám sát (Freshness & monitor)
+## 3. Freshness & monitor
 
-Cả hai lần chạy đều cho kết quả `freshness_check=FAIL` vì `latest_exported_at = 2026-04-10T08:00:00Z`, cũ hơn SLA 24h. Đây là cảnh báo độ tươi của bộ dữ liệu mẫu, không phải lỗi logic của pipeline. Manifest vẫn hữu ích để chỉ ra rằng dữ liệu đã xuất bản thành công nhưng không còn mới.
+Ca hai run deu cho `freshness_check=FAIL` vi `latest_exported_at = 2026-04-10T08:00:00Z`, cu hon SLA 24h. Day la canh bao freshness cua bo du lieu mau, khong phai loi logic pipeline. Manifest van huu ich de chi ra rang du lieu da publish thanh cong nhung khong con moi.
 
 ---
 
-## 4. Đưa lỗi vào (Corruption inject - Sprint 3)
+## 4. Corruption inject (Sprint 3)
 
-Kịch bản đưa lỗi vào được chạy bằng:
+Kich ban inject duoc chay bang:
 
 ```powershell
 python etl_pipeline.py run --run-id inject-bad --raw data/raw/policy_export_dirty_extended.csv --no-refund-fix --skip-validate
 ```
 
-Hai thay đổi có chủ đích:
+Hai thay doi co chu dich:
 
-- Tắt việc sửa `refund` để văn bản cũ `14 ngay lam viec` được giữ lại trong bản xuất đã làm sạch (cleaned publish).
-- Bỏ qua việc dừng kiểm định (validation halt) để các bản ghi lỗi vẫn được đưa vào Chroma.
+- Tat `refund` fix de stale text `14 ngay lam viec` duoc giu lai trong cleaned publish.
+- Bo qua validation halt de record loi van duoc embed vao Chroma.
 
-Bằng chứng:
+Bang chung:
 
 - `artifacts/logs/run_inject-bad.log`: `refund_no_stale_14d_window FAIL (halt) :: violations=1`
-- `artifacts/cleaned/cleaned_inject-bad.csv`: còn đoạn refund cũ `14 ngay lam viec`
-- `artifacts/eval/inject-bad.csv`: `q_refund_window` có `hits_forbidden=yes`
+- `artifacts/cleaned/cleaned_inject-bad.csv`: con chunk refund stale `14 ngay lam viec`
+- `artifacts/eval/inject-bad.csv`: `q_refund_window` co `hits_forbidden=yes`
 
 ---
 
-## 5. Hạn chế & việc chưa làm
+## 5. Han che & viec chua lam
 
-- Việc đánh giá hiện tại là truy xuất dựa trên từ khóa (keyword-based), chưa chấm điểm tạo câu trả lời đầy đủ (full answer generation).
-- Độ tươi của bộ dữ liệu mẫu vẫn thất bại theo SLA 24h.
-- Cần bổ sung thêm phần diễn giải trong `runbook.md` và tổng hợp vào `reports/group_report.md`.
+- Eval hien tai la retrieval keyword-based, chua cham full answer generation.
+- Freshness cua bo du lieu mau van fail theo SLA 24h.
+- Can bo sung them phan dien giai trong `runbook.md` va tong hop vao `reports/group_report.md`.

@@ -1,0 +1,31 @@
+{
+  "run_id": "normal",
+  "run_timestamp": "2026-04-15T10:21:58.260756+00:00",
+  "raw_path": "data\\raw\\policy_export_dirty_extended.csv",
+  "raw_records": 16,
+  "cleaned_records": 10,
+  "quarantine_records": 6,
+  "latest_exported_at": "2026-04-10T08:00:00Z",
+  "no_refund_fix": false,
+  "skipped_validate": false,
+  "clean_metrics": {
+    "rule_normalize_exported_at": 14,
+    "rule_dedupe_chunk_text": 2,
+    "rule_fix_refund_window": 1,
+    "rule_quarantine_missing_effective_date": 1,
+    "rule_quarantine_stale_hr_effective_date": 1,
+    "rule_quarantine_unknown_doc_id": 1,
+    "rule_normalize_effective_date": 1,
+    "rule_normalize_contact_tokens": 1,
+    "rule_normalize_currency_vnd": 1,
+    "rule_html_unescape": 1,
+    "rule_compact_whitespace": 1,
+    "rule_fix_hr_leave_version": 1
+  },
+  "validation_metrics": {
+    "validation_chunk_too_short": 1
+  },
+  "cleaned_csv": "artifacts\\cleaned\\cleaned_normal.csv",
+  "chroma_path": "./chroma_db",
+  "chroma_collection": "day10_kb"
+}

@@ -26,7 +26,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from monitoring.freshness_check import check_manifest_freshness
-from quality.expectations import run_expectations
+from quality.expectations import quarantine_invalid_rows, run_expectations
 from transform.cleaning_rules import clean_rows, load_raw_csv, write_cleaned_csv, write_quarantine_csv
 
 load_dotenv()
@@ -46,9 +46,16 @@ def _log(path: Path, line: str) -> None:
         f.write(line + "\n")
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     run_id = args.run_id or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%MZ")
-    raw_path = Path(args.raw)
+    raw_path = Path(args.raw).resolve()
     if not raw_path.is_file():
         print(f"ERROR: raw file not found: {raw_path}", file=sys.stderr)
         return 1
@@ -56,6 +63,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     log_path = LOG_DIR / f"run_{run_id.replace(':', '-')}.log"
     for p in (LOG_DIR, MAN_DIR, QUAR_DIR, CLEAN_DIR):
         p.mkdir(parents=True, exist_ok=True)
+    if log_path.exists():
+        log_path.unlink()
 
     def log(msg: str) -> None:
         print(msg)
@@ -66,10 +75,23 @@ def cmd_run(args: argparse.Namespace) -> int:
     log(f"run_id={run_id}")
     log(f"raw_records={raw_count}")
 
-    cleaned, quarantine = clean_rows(
+    cleaned_pre_validation, quarantine, clean_metrics = clean_rows(
         rows,
         apply_refund_window_fix=not args.no_refund_fix,
     )
+
+    for name in sorted(clean_metrics):
+        log(f"metric[{name}]={clean_metrics[name]}")
+
+    validation_metrics = {}
+    if args.skip_validate:
+        cleaned = cleaned_pre_validation
+    else:
+        cleaned, validation_quarantine, validation_metrics = quarantine_invalid_rows(cleaned_pre_validation)
+        quarantine.extend(validation_quarantine)
+        for name in sorted(validation_metrics):
+            log(f"metric[{name}]={validation_metrics[name]}")
+
     cleaned_path = CLEAN_DIR / f"cleaned_{run_id.replace(':', '-')}.csv"
     quar_path = QUAR_DIR / f"quarantine_{run_id.replace(':', '-')}.csv"
     write_cleaned_csv(cleaned_path, cleaned)
@@ -77,8 +99,8 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     log(f"cleaned_records={len(cleaned)}")
     log(f"quarantine_records={len(quarantine)}")
-    log(f"cleaned_csv={cleaned_path.relative_to(ROOT)}")
-    log(f"quarantine_csv={quar_path.relative_to(ROOT)}")
+    log(f"cleaned_csv={_display_path(cleaned_path)}")
+    log(f"quarantine_csv={_display_path(quar_path)}")
 
     results, halt = run_expectations(cleaned)
     for r in results:
@@ -106,20 +128,22 @@ def cmd_run(args: argparse.Namespace) -> int:
     manifest = {
         "run_id": run_id,
         "run_timestamp": datetime.now(timezone.utc).isoformat(),
-        "raw_path": str(raw_path.relative_to(ROOT)),
+        "raw_path": _display_path(raw_path),
         "raw_records": raw_count,
         "cleaned_records": len(cleaned),
         "quarantine_records": len(quarantine),
         "latest_exported_at": latest_exported,
         "no_refund_fix": bool(args.no_refund_fix),
-        "skipped_validate": bool(args.skip_validate and halt),
-        "cleaned_csv": str(cleaned_path.relative_to(ROOT)),
+        "skipped_validate": bool(args.skip_validate),
+        "clean_metrics": clean_metrics,
+        "validation_metrics": validation_metrics,
+        "cleaned_csv": _display_path(cleaned_path),
         "chroma_path": os.environ.get("CHROMA_DB_PATH", "./chroma_db"),
         "chroma_collection": os.environ.get("CHROMA_COLLECTION", "day10_kb"),
     }
     man_path = MAN_DIR / f"manifest_{run_id.replace(':', '-')}.json"
     man_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    log(f"manifest_written={man_path.relative_to(ROOT)}")
+    log(f"manifest_written={_display_path(man_path)}")
 
     status, fdetail = check_manifest_freshness(man_path, sla_hours=float(os.environ.get("FRESHNESS_SLA_HOURS", "24")))
     log(f"freshness_check={status} {json.dumps(fdetail, ensure_ascii=False)}")

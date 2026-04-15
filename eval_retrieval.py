@@ -81,8 +81,8 @@ def main() -> int:
         for q in questions:
             text = q["question"]
             res = col.query(query_texts=[text], n_results=args.top_k)
-            docs = (res.get("documents") or [[]])[0]
-            metas = (res.get("metadatas") or [[]])[0]
+            docs = [doc or "" for doc in ((res.get("documents") or [[]])[0])]
+            metas = [(meta or {}) for meta in ((res.get("metadatas") or [[]])[0])]
             top_doc = (metas[0] or {}).get("doc_id", "") if metas else ""
             preview = (docs[0] or "")[:180].replace("\n", " ") if docs else ""
             blob = " ".join(docs).lower()
