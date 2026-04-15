@@ -3,7 +3,26 @@
 
 version: "1.0"
 dataset: "kb_chunk_export"
-owner_team: "__TODO__"
+owner_team: "Platform / Knowledge Base Squad"
+owner: "Lab10 IT Helpdesk ETL Team"
+pipeline_sla:
+  freshness_hours: 24
+  max_quarantine_rate_pct: 5
+  max_pipeline_runtime_minutes: 15
+
+failure_modes:
+  - id: "duplicate_chunk_export"
+    description: "Cung mot noi dung bi export lap lai trong cung doc_id hoac khac chunk_id."
+    impact: "Lam retrieval tra ve thong tin trung lap va tang nguy co stale hit."
+    mitigation: "Deduplicate tai cleaning stage, giu occurrence dau tien va day phan con lai vao quarantine."
+  - id: "invalid_or_ambiguous_effective_date"
+    description: "effective_date null, sai dinh dang hoac mo ho 01/02/2026."
+    impact: "Khong xac dinh duoc version canonical va co the embed sai tai lieu."
+    mitigation: "Normalize ve ISO date; neu khong the sua an toan thi quarantine."
+  - id: "stale_policy_version_conflict"
+    description: "Refund window 14 ngay hoac HR leave 10 ngay xung dot voi canonical hien hanh."
+    impact: "Retriever co the tham chieu stale policy va tra loi sai."
+    mitigation: "Rule fix baseline truoc validate, expectation halt neu van con stale text."
 
 schema_cleaned:
   chunk_id:
@@ -36,7 +55,7 @@ quality_rules:
 freshness:
   measured_at: "publish"  # ingest | cleaned | publish
   sla_hours: 24
-  alert_channel: "__TODO__"
+  alert_channel: "slack/#data-ops"
 
 canonical_sources:
   - path: "data/docs/policy_refund_v4.txt"
