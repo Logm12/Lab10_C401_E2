@@ -103,4 +103,4 @@ Trong bài lab, nhóm vẫn publish để tạo bằng chứng monitoring và be
 
 - Bộ dữ liệu mẫu vẫn stale theo SLA 24h nên freshness luôn `FAIL`
 - Eval hiện tại là retrieval keyword-based, chưa chấm full answer generation
-- Bốn thành viên cần điền tên thật và thông tin cá nhân vào các file `reports/individual/*.md`
+- Bốn thành viên cần hoàn thiện report cá nhân của mình
