@@ -1,6 +1,7 @@
 # Báo Cáo Cá Nhân - Member 2: Cleaning / Quality Owner
 
-**Họ và tên:** Bùi Hữu Huấn 
+**Họ và tên:** Bùi Hữu Huấn   
+
 **Vai trò:** Cleaning / Quality Owner  
 **Ngày nộp:** 2026-04-15
 
